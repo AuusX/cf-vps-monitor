@@ -7,6 +7,7 @@ import { DisplayThemeProvider } from './contexts/DisplayThemeContext';
 import { LiveDataProvider } from './contexts/LiveDataContext';
 import Loading from './components/Loading';
 import ErrorBoundary from './components/ErrorBoundary';
+import PublicAccessGate from './components/PublicAccessGate';
 import { PUBLIC_DATA_READY_EVENT } from './utils/publicDataEvents';
 
 const loadLayout = () => import('./pages/Layout');
@@ -123,7 +124,7 @@ export default function App() {
           <ErrorBoundary>
             <Suspense fallback={<Loading fullScreen />}>
               <Routes>
-                <Route path="/" element={<Layout />}>
+                <Route path="/" element={<PublicAccessGate><Layout /></PublicAccessGate>}>
                   <Route index element={<LiveDataRoute><PublicIndexRoute /></LiveDataRoute>} />
                   <Route path="instance/:uuid" element={<LiveDataRoute><Instance /></LiveDataRoute>} />
                 </Route>

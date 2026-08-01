@@ -5,7 +5,7 @@ import { Download, RotateCcw, Save, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import Loading from '../../components/Loading';
 import { useApi } from '../../contexts/AuthContext';
-import { SettingCard, SettingInput } from '../../components/admin/SettingCard';
+import { SettingCard, SettingInput, SettingToggle } from '../../components/admin/SettingCard';
 import { getChangedSettings, type SettingsMap } from '../../utils/settingsDiff';
 import { requestPassword } from '../../utils/reauth';
 import { notifyPublicDataUpdated } from '../../utils/publicDataEvents';
@@ -28,6 +28,7 @@ export default function SettingsSite() {
   const [loading, setLoading] = useState(!settingsCache.site);
   const [saving, setSaving] = useState(false);
   const [logoSaving, setLogoSaving] = useState(false);
+  const [publicAccessPassword, setPublicAccessPassword] = useState('');
   const logoInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -45,6 +46,17 @@ export default function SettingsSite() {
 
   const handleSave = useCallback(async () => {
     const changedSettings = getChangedSettings(settings, originalSettings);
+    const publicAccessEnabled = settings.public_access_enabled === 'true';
+    const publicAccessPasswordSet = settings.public_access_password_set === 'true';
+    if (publicAccessEnabled && !publicAccessPasswordSet && !publicAccessPassword) {
+      toast.error('启用访问保护前请先设置访问密码');
+      return;
+    }
+    if (publicAccessPassword && Array.from(publicAccessPassword).length < 6) {
+      toast.error('访问密码至少需要 6 位');
+      return;
+    }
+    if (publicAccessPassword) changedSettings.public_access_password = publicAccessPassword;
     if (Object.keys(changedSettings).length === 0) {
       toast.info('没有需要保存的改动');
       return;
@@ -57,8 +69,17 @@ export default function SettingsSite() {
         body: JSON.stringify(changedSettings),
       });
       if (result.success) {
-        setOriginalSettings((prev) => ({ ...prev, ...changedSettings }));
-        setSettingsScope('site', { ...settings, ...changedSettings });
+        const persistedChanges = { ...changedSettings };
+        delete persistedChanges.public_access_password;
+        const nextSettings = {
+          ...settings,
+          ...persistedChanges,
+          ...(publicAccessPassword ? { public_access_password_set: 'true' } : {}),
+        };
+        setSettings(nextSettings);
+        setOriginalSettings(nextSettings);
+        setSettingsScope('site', nextSettings);
+        setPublicAccessPassword('');
         notifyPublicDataUpdated();
         toast.success('设置已保存');
       } else {
@@ -69,7 +90,7 @@ export default function SettingsSite() {
     } finally {
       setSaving(false);
     }
-  }, [apiFetch, originalSettings, setSettingsScope, settings]);
+  }, [apiFetch, originalSettings, publicAccessPassword, setSettingsScope, settings]);
 
   const headerAction = useMemo(() => (
     <Button onClick={handleSave} disabled={loading || saving}>
@@ -282,6 +303,23 @@ export default function SettingsSite() {
           value={settings.script_domain || ''}
           onChange={(value) => updateSetting('script_domain', value)}
           placeholder={window.location.origin}
+        />
+      </SettingCard>
+
+      <SettingCard title="访问保护" description="限制访客查看前台监控数据" defaultOpen>
+        <SettingToggle
+          label="启用访问密码"
+          description="管理员登录状态可直接进入前台"
+          checked={settings.public_access_enabled === 'true'}
+          onCheckedChange={(checked) => updateSetting('public_access_enabled', checked ? 'true' : 'false')}
+        />
+        <SettingInput
+          label={settings.public_access_password_set === 'true' ? '更换访问密码' : '设置访问密码'}
+          description={settings.public_access_password_set === 'true' ? '留空则保留当前密码' : '访问密码至少需要 6 位'}
+          value={publicAccessPassword}
+          onChange={setPublicAccessPassword}
+          type="password"
+          placeholder={settings.public_access_password_set === 'true' ? '已设置' : '输入访问密码'}
         />
       </SettingCard>
 

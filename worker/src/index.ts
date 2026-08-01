@@ -4,12 +4,12 @@
  */
 
 import { Hono } from 'hono';
-import type { Context } from 'hono';
+import type { Context, Next } from 'hono';
 import { APP_VERSION } from './utils/app-version';
 import { shortGitSha } from './utils/update-check';
 
 // 路由模块
-import { publicRoutes } from './routes/public';
+import { hasPublicMonitorAccess, publicRoutes } from './routes/public';
 import { adminRoutes } from './routes/admin';
 import { adminThemeRoutes, publicThemeRoutes } from './routes/theme';
 import { clientRoutes } from './routes/client';
@@ -155,6 +155,9 @@ function canServeWithoutDatabaseStartup(pathname: string): boolean {
     pathname === '/api/login/mfa' ||
     pathname === '/api/logout' ||
     pathname === '/api/me' ||
+    pathname === '/api/access/status' ||
+    pathname === '/api/access/login' ||
+    pathname === '/api/access/logout' ||
     pathname === '/api/clients' ||
     pathname.startsWith('/api/clients/') ||
     pathname === '/api/nodes' ||
@@ -321,6 +324,16 @@ app.route('/api', publicRoutes);
 app.route('/api/clients', clientRoutes);
 
 // WebSocket 路由
+const requirePublicMonitorAccess = async (c: AppContext, next: Next): Promise<Response | void> => {
+  if (!await hasPublicMonitorAccess(c)) {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ code: 'PUBLIC_ACCESS_REQUIRED', error: '请输入访问密码' }, 401);
+  }
+  await next();
+  c.header('Cache-Control', 'private, no-store');
+};
+app.use('/api/ws/*', requirePublicMonitorAccess);
+app.use('/api/live/clients', requirePublicMonitorAccess);
 app.route('/api', wsRoutes);
 
 // 管理员 API，JWT 认证

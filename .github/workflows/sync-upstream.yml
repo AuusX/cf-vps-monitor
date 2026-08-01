@@ -1,0 +1,86 @@
+name: 安全同步上游
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  create-sync-pr:
+    name: 创建上游同步 PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出完整仓库
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: 合并上游到临时分支
+        id: sync
+        shell: bash
+        env:
+          SYNC_BRANCH: upstream-sync-${{ github.run_id }}
+          UPSTREAM_REPOSITORY: kadidalax/cf-vps-monitor
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
+          git fetch --no-tags upstream main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git switch -c "$SYNC_BRANCH"
+          git merge --no-ff --no-edit upstream/main
+          git push --set-upstream origin "$SYNC_BRANCH"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$SYNC_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: 验证并创建同步 PR
+        if: steps.sync.outputs.changed == 'true'
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_BRANCH: ${{ steps.sync.outputs.branch }}
+        run: |
+          gh workflow run custom-access-protection.yml --ref "$SYNC_BRANCH"
+
+          run_id=""
+          for attempt in {1..20}; do
+            run_id=$(gh run list \
+              --workflow custom-access-protection.yml \
+              --branch "$SYNC_BRANCH" \
+              --event workflow_dispatch \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId // empty')
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 3
+          done
+          if [[ -z "$run_id" ]]; then
+            echo "未找到自定义访问保护检查任务。" >&2
+            exit 1
+          fi
+
+          gh run watch "$run_id" --exit-status
+          gh pr create \
+            --base main \
+            --head "$SYNC_BRANCH" \
+            --title "chore: 安全同步上游更新" \
+            --body "此 PR 由安全同步工作流创建。请等待自定义访问保护检查通过后再合并。"
+
+      - name: 无需同步
+        if: steps.sync.outputs.changed != 'true'
+        run: echo "当前 main 已包含上游最新提交。"

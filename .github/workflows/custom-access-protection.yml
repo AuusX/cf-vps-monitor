@@ -1,0 +1,48 @@
+name: 自定义访问保护检查
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: custom-access-protection-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 检查密码门禁与构建
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v5
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 类型检查
+        run: npm run lint
+
+      - name: 检查自定义访问保护
+        run: >-
+          node --test
+          worker/src/auth/public-access.test.mjs
+          worker/src/routes/public-access.test.mjs
+          worker/src/routes/public.mfa-login.test.mjs
+
+      - name: 构建 Cloudflare 应用
+        run: npm run build
