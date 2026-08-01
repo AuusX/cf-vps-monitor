@@ -41,6 +41,7 @@ jobs:
         run: >-
           node --test
           worker/src/auth/public-access.test.mjs
+          worker/src/auth/public-access-policy.test.mjs
           worker/src/routes/public-access.test.mjs
           worker/src/routes/public.mfa-login.test.mjs
 

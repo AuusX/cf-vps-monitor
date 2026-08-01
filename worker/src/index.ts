@@ -21,6 +21,7 @@ import { validateAdminSession } from './auth/admin-session';
 import { AuthConfigurationError, verifyAdminToken, type AdminJwtPayload } from './auth/jwt';
 import { isMfaStepUpProtectedRequest } from './auth/mfa-policy';
 import { verifyMfaToken } from './auth/mfa-token';
+import { requiresPublicMonitorAccess } from './auth/public-access-policy';
 import { getAdminSessionToken, getMfaStepUpToken, verifyAdminCsrfToken } from './auth/session';
 import { buildAdminSettings } from './settings/schema';
 import { bestEffortRecordHealthEvent, errorDetail } from './utils/observability';
@@ -311,6 +312,21 @@ app.use('/api/*', async (c, next) => {
   return undefined;
 });
 
+const requirePublicMonitorAccess = async (c: AppContext, next: Next): Promise<Response | void> => {
+  if (!requiresPublicMonitorAccess(c.req.method, new URL(c.req.url).pathname)) {
+    await next();
+    return undefined;
+  }
+  if (!await hasPublicMonitorAccess(c)) {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ code: 'PUBLIC_ACCESS_REQUIRED', error: '请输入访问密码' }, 401);
+  }
+  await next();
+  c.header('Cache-Control', 'private, no-store');
+  return undefined;
+};
+app.use('/api/*', requirePublicMonitorAccess);
+
 app.get('/agent/install.sh', (c) => c.redirect('https://raw.githubusercontent.com/kadidalax/cf-vps-monitor/main/agent/install.sh', 302));
 app.get('/agent/install-linux.sh', (c) => c.redirect('https://raw.githubusercontent.com/kadidalax/cf-vps-monitor/main/agent/install-linux.sh', 302));
 app.get('/agent/install-windows.ps1', (c) => c.redirect('https://raw.githubusercontent.com/kadidalax/cf-vps-monitor/main/agent/install-windows.ps1', 302));
@@ -324,16 +340,6 @@ app.route('/api', publicRoutes);
 app.route('/api/clients', clientRoutes);
 
 // WebSocket 路由
-const requirePublicMonitorAccess = async (c: AppContext, next: Next): Promise<Response | void> => {
-  if (!await hasPublicMonitorAccess(c)) {
-    c.header('Cache-Control', 'no-store');
-    return c.json({ code: 'PUBLIC_ACCESS_REQUIRED', error: '请输入访问密码' }, 401);
-  }
-  await next();
-  c.header('Cache-Control', 'private, no-store');
-};
-app.use('/api/ws/*', requirePublicMonitorAccess);
-app.use('/api/live/clients', requirePublicMonitorAccess);
 app.route('/api', wsRoutes);
 
 // 管理员 API，JWT 认证
