@@ -1456,21 +1456,6 @@ publicRoutes.post('/access/logout', (c) => {
   return c.json({ success: true });
 });
 
-publicRoutes.use('*', async (c, next) => {
-  const pathname = new URL(c.req.url).pathname;
-  if (pathname === '/api/site-logo' || pathname === '/api/public') {
-    await next();
-    return;
-  }
-  if (!await hasPublicMonitorAccess(c)) {
-    c.header('Cache-Control', 'no-store');
-    return c.json({ code: 'PUBLIC_ACCESS_REQUIRED', error: '请输入访问密码' }, 401);
-  }
-  await next();
-  c.header('Cache-Control', 'private, no-store');
-  return undefined;
-});
-
 // 获取所有客户端列表（公开）
 publicRoutes.get('/site-logo', async (c) => {
   const settings = await db.getSettingsByKeys(getDatabase(c.env), ['site_logo_data', 'site_logo_type']);
