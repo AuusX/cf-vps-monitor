@@ -51,6 +51,7 @@ import {
   clearLoginFailures,
   deleteAdminSessionEdgeCache,
   getLoginRetryAfterSeconds,
+  invalidatePublicAccessSettingsCache,
   invalidatePublicMetadataCache,
   loadLoginRateLimitStates,
   mfaRateLimitBuckets,
@@ -123,6 +124,8 @@ const SETTINGS_SCOPE_KEYS = {
     'language',
     'script_domain',
     'site_logo_url',
+    'public_access_enabled',
+    'public_access_password_hash',
   ],
   general: [
     'record_enabled',
@@ -184,6 +187,8 @@ const AGENT_TOKEN_UNUSED_WARNING_MS = 7 * 24 * 60 * 60 * 1000;
 const AGENT_TOKEN_STALE_USE_WARNING_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_ADMIN_JSON_BYTES = 256 * 1024;
 const MAX_SITE_LOGO_BYTES = 1024 * 1024;
+const MIN_PUBLIC_ACCESS_PASSWORD_LENGTH = 6;
+const MAX_PUBLIC_ACCESS_PASSWORD_LENGTH = 256;
 
 type LiveClientMeta = Partial<Omit<db.Client, 'token' | 'token_hash'>> & Pick<db.Client, 'uuid'>;
 type AdminClientsSnapshot = {
@@ -2183,6 +2188,10 @@ adminRoutes.get('/settings', async (c) => {
     const keys = [...SETTINGS_SCOPE_KEYS[scope as keyof typeof SETTINGS_SCOPE_KEYS]];
     const settings = buildAdminSettings(await db.getSettingsByKeys(database, keys, fresh));
     const scoped = Object.fromEntries(keys.map((key) => [key, settings[key]]));
+    if (scope === 'site') {
+      scoped.public_access_password_set = settings.public_access_password_hash ? 'true' : 'false';
+      delete scoped.public_access_password_hash;
+    }
     if (scope === 'notification') {
       scoped.email_smtp_password_set = settings.email_smtp_password ? 'true' : 'false';
       scoped.webhook_url_set = settings.webhook_url ? 'true' : 'false';
@@ -2200,8 +2209,10 @@ adminRoutes.get('/settings', async (c) => {
     return c.json(scoped);
   }
 
-  const settings = await db.getAllSettings(database, isQueryFlagEnabled(c.req.query('refresh')));
-  return c.json(buildAdminSettings(settings));
+  const settings = buildAdminSettings(await db.getAllSettings(database, isQueryFlagEnabled(c.req.query('refresh'))));
+  settings.public_access_password_set = settings.public_access_password_hash ? 'true' : 'false';
+  delete settings.public_access_password_hash;
+  return c.json(settings);
 });
 
 // 修改设置
@@ -2212,6 +2223,19 @@ adminRoutes.post('/settings', async (c) => {
     const body = parsed.body;
     const database = getDatabase(c.env);
     const settingsBody = { ...body };
+    const publicAccessPassword = settingsBody.public_access_password;
+    delete settingsBody.public_access_password;
+    delete settingsBody.public_access_password_set;
+    delete settingsBody.public_access_password_hash;
+    if (publicAccessPassword !== undefined) {
+      if (typeof publicAccessPassword !== 'string') {
+        return c.json({ error: '访问密码格式无效' }, 400);
+      }
+      const passwordLength = Array.from(publicAccessPassword).length;
+      if (passwordLength < MIN_PUBLIC_ACCESS_PASSWORD_LENGTH || passwordLength > MAX_PUBLIC_ACCESS_PASSWORD_LENGTH) {
+        return c.json({ error: `访问密码需要 ${MIN_PUBLIC_ACCESS_PASSWORD_LENGTH}-${MAX_PUBLIC_ACCESS_PASSWORD_LENGTH} 位` }, 400);
+      }
+    }
     delete settingsBody.email_smtp_password_set;
     delete settingsBody.webhook_url_set;
     delete settingsBody.webhook_secret_set;
@@ -2235,6 +2259,15 @@ adminRoutes.post('/settings', async (c) => {
     if (!normalized.ok) {
       return c.json({ error: '设置校验失败', details: normalized.errors }, 400);
     }
+    if (typeof publicAccessPassword === 'string') {
+      normalized.settings.public_access_password_hash = await hashPassword(publicAccessPassword);
+    }
+    if (normalized.settings.public_access_enabled === 'true' && !normalized.settings.public_access_password_hash) {
+      const stored = await db.getSettingsByKeys(database, ['public_access_password_hash'], true);
+      if (!stored.public_access_password_hash) {
+        return c.json({ error: '启用访问保护前请先设置访问密码' }, 400);
+      }
+    }
 
     const currentSettings = buildAdminSettings(
       await db.getSettingsByKeys(database, Object.keys(normalized.settings), true),
@@ -2256,6 +2289,9 @@ adminRoutes.post('/settings', async (c) => {
 
     await db.setSettings(database, changedSettings);
     invalidateAdminSettingsCache();
+    if (changedKeys.includes('public_access_enabled') || changedKeys.includes('public_access_password_hash')) {
+      invalidatePublicAccessSettingsCache();
+    }
     const background: Promise<unknown>[] = [];
     if (changedKeys.some((key) => CAPACITY_ESTIMATE_SETTING_KEY_SET.has(key))) {
       invalidateCapacityEstimateCache();

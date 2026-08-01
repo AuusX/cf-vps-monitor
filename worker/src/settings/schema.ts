@@ -79,6 +79,19 @@ export const SETTING_SCHEMA = {
     public: false,
     maxLength: 64,
   },
+  public_access_enabled: {
+    type: 'boolean',
+    defaultValue: 'false',
+    public: false,
+  },
+  public_access_password_hash: {
+    type: 'string',
+    defaultValue: '',
+    public: false,
+    sensitive: true,
+    maxLength: 256,
+    minLengthWhenSet: 64,
+  },
   update_repository_url: {
     type: 'string',
     defaultValue: '',

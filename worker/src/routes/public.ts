@@ -15,6 +15,13 @@ import { generateMfaToken, verifyMfaToken } from '../auth/mfa-token';
 import { verifyTotpCode } from '../auth/totp';
 import { hashPassword, needsPasswordRehash, validateAdminPasswordStrength, verifyPassword } from '../auth/password';
 import {
+  clearPublicAccessCookie,
+  createPublicAccessToken,
+  getPublicAccessToken,
+  setPublicAccessCookie,
+  verifyPublicAccessToken,
+} from '../auth/public-access';
+import {
   clearAdminSessionCookie,
   ensureAdminCsrfCookie,
   getAdminSessionToken,
@@ -53,12 +60,14 @@ const PUBLIC_METADATA_RATE_LIMIT_MAX = 120;
 const PUBLIC_HISTORY_RATE_LIMIT_MAX = 60;
 const PUBLIC_LIVE_RATE_LIMIT_MAX = 180;
 const PUBLIC_ADMIN_RECOVERY_RATE_LIMIT_MAX = 5;
+const PUBLIC_ACCESS_LOGIN_RATE_LIMIT_MAX = 5;
 const PUBLIC_METADATA_CACHE_SECONDS = 30;
 const PUBLIC_HISTORY_CACHE_SECONDS = 10;
 const PUBLIC_LIVE_CACHE_SECONDS = 2;
 const PUBLIC_HISTORY_MAX_PAGE = 1000;
 const PUBLIC_HISTORY_MAX_OFFSET_ROWS = 5000;
 const PUBLIC_METADATA_CACHE_MS = PUBLIC_METADATA_CACHE_SECONDS * 1000;
+const PUBLIC_ACCESS_SETTINGS_CACHE_MS = 5_000;
 const PUBLIC_HISTORY_CACHE_MS = PUBLIC_HISTORY_CACHE_SECONDS * 1000;
 const PUBLIC_HISTORY_CACHE_MAX_ENTRIES = 256;
 const PUBLIC_METADATA_CACHE_MAX_ENTRIES = PUBLIC_HISTORY_CACHE_MAX_ENTRIES;
@@ -93,6 +102,7 @@ type AdminClientsSnapshotOverlay = {
 type PublicNode = Omit<PublicClient, 'tags'> & { tags: string[] };
 
 let publicSettingsCache: { value: PublicSettings; expiresAt: number } | null = null;
+let publicAccessSettingsCache: { enabled: boolean; passwordHash: string; expiresAt: number } | null = null;
 let publicClientsSnapshotCache: PublicClientsSnapshot | null = null;
 let publicPingTasksCache: { value: db.PingTask[]; expiresAt: number } | null = null;
 const publicMetadataResponseCache = new Map<string, { value: unknown; expiresAt: number }>();
@@ -514,6 +524,49 @@ export async function hasAdminSession(c: PublicContext): Promise<boolean> {
   }
 }
 
+type PublicAccessSettings = {
+  enabled: boolean;
+  passwordHash: string;
+};
+
+async function getPublicAccessSettings(database: db.QueryDatabase): Promise<PublicAccessSettings> {
+  const now = Date.now();
+  if (publicAccessSettingsCache && publicAccessSettingsCache.expiresAt > now) {
+    return publicAccessSettingsCache;
+  }
+
+  const stored = await db.getSettingsByKeys(database, [
+    'public_access_enabled',
+    'public_access_password_hash',
+  ], true);
+  publicAccessSettingsCache = {
+    enabled: stored.public_access_enabled === 'true',
+    passwordHash: stored.public_access_password_hash || '',
+    expiresAt: now + PUBLIC_ACCESS_SETTINGS_CACHE_MS,
+  };
+  return publicAccessSettingsCache;
+}
+
+export function invalidatePublicAccessSettingsCache(): void {
+  publicAccessSettingsCache = null;
+}
+
+async function hasConfiguredPublicAccess(c: PublicContext, settings: PublicAccessSettings): Promise<boolean> {
+  if (await hasAdminSession(c)) return true;
+  const token = getPublicAccessToken(c);
+  return Boolean(
+    token &&
+    settings.passwordHash &&
+    await verifyPublicAccessToken(token, settings.passwordHash, c.env),
+  );
+}
+
+export async function hasPublicMonitorAccess(c: PublicContext): Promise<boolean> {
+  const settings = await getPublicAccessSettings(getDatabase(c.env));
+  if (!settings.enabled) return true;
+  return hasConfiguredPublicAccess(c, settings);
+}
+
 async function readAdminClientsSnapshotOverlay(c: PublicContext): Promise<AdminClientsSnapshotOverlay | null> {
   const response = await c.env.LIVE_DATA
     .get(c.env.LIVE_DATA.idFromName('global'))
@@ -719,6 +772,10 @@ function guardPublicLive(c: PublicContext): Promise<Response | null> {
 
 function guardAdminRecovery(c: PublicContext): Promise<Response | null> {
   return publicApiRateLimit(c, 'admin-recovery', PUBLIC_ADMIN_RECOVERY_RATE_LIMIT_MAX);
+}
+
+function guardPublicAccessLogin(c: PublicContext): Promise<Response | null> {
+  return publicApiRateLimit(c, 'public-access-login', PUBLIC_ACCESS_LOGIN_RATE_LIMIT_MAX);
 }
 
 async function preparePublicHistoryRequest(
@@ -1355,6 +1412,63 @@ publicRoutes.get('/me', async (c) => {
     }
     return c.json({ error: 'Token 无效' }, 401);
   }
+});
+
+publicRoutes.get('/access/status', async (c) => {
+  const settings = await getPublicAccessSettings(getDatabase(c.env));
+  const authenticated = !settings.enabled || await hasConfiguredPublicAccess(c, settings);
+  c.header('Cache-Control', 'no-store');
+  return c.json({ password_required: settings.enabled, authenticated });
+});
+
+publicRoutes.post('/access/login', async (c) => {
+  const limited = await guardPublicAccessLogin(c);
+  if (limited) return limited;
+
+  const settings = await getPublicAccessSettings(getDatabase(c.env));
+  if (!settings.enabled) {
+    clearPublicAccessCookie(c);
+    return c.json({ success: true });
+  }
+  if (!settings.passwordHash) {
+    return c.json({ error: '访问保护配置不完整' }, 503);
+  }
+
+  const parsed = await readPublicJsonObject(c);
+  if ('response' in parsed) return parsed.response;
+  const password = parsed.body.password;
+  if (typeof password !== 'string' || Array.from(password).length > MAX_LOGIN_PASSWORD_LENGTH) {
+    return c.json({ error: '访问密码错误' }, 401);
+  }
+  if (!await verifyPassword(password, settings.passwordHash)) {
+    clearPublicAccessCookie(c);
+    return c.json({ error: '访问密码错误' }, 401);
+  }
+
+  setPublicAccessCookie(c, await createPublicAccessToken(settings.passwordHash, c.env));
+  c.header('Cache-Control', 'no-store');
+  return c.json({ success: true });
+});
+
+publicRoutes.post('/access/logout', (c) => {
+  clearPublicAccessCookie(c);
+  c.header('Cache-Control', 'no-store');
+  return c.json({ success: true });
+});
+
+publicRoutes.use('*', async (c, next) => {
+  const pathname = new URL(c.req.url).pathname;
+  if (pathname === '/api/site-logo' || pathname === '/api/public') {
+    await next();
+    return;
+  }
+  if (!await hasPublicMonitorAccess(c)) {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ code: 'PUBLIC_ACCESS_REQUIRED', error: '请输入访问密码' }, 401);
+  }
+  await next();
+  c.header('Cache-Control', 'private, no-store');
+  return undefined;
 });
 
 // 获取所有客户端列表（公开）
