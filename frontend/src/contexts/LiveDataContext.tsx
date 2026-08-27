@@ -492,7 +492,7 @@ export function LiveDataProvider({ children, enabled = true, viewer = true }: Li
           }
           if (isViewerExpiredMessage(message)) {
             clearInitialSnapshotTimeout();
-            reconnectLiveWebSocket();
+            expireViewerSession();
             return;
           }
           if (isMetadataChangedMessage(message)) {
@@ -530,24 +530,6 @@ export function LiveDataProvider({ children, enabled = true, viewer = true }: Li
           );
         }
       });
-    };
-
-    const reconnectLiveWebSocket = () => {
-      wsOpenRef.current = false;
-      wsExpiredRef.current = false;
-      fallbackExpiresAtRef.current = null;
-      setViewerExpired(false);
-      setViewerExpiresAt(null);
-      setLoading(false);
-      const ws = wsRef.current;
-      wsRef.current = null;
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        try {
-          ws.close();
-        } catch {}
-      }
-      clearReconnectTimeout();
-      reconnectTimeoutRef.current = setTimeout(() => { void connect(); }, 0);
     };
 
     void connect();

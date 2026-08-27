@@ -302,7 +302,7 @@ export default function Index() {
     };
 
     const loadWhenVisible = () => {
-      loadClients();
+      if (document.visibilityState === 'visible') loadClients();
     };
     const refreshPublicClients = (detail?: PublicDataUpdateDetail) => {
       clearCachedPublicBootstrap();
@@ -328,12 +328,10 @@ export default function Index() {
     loadClients();
     const unsubscribePublicData = subscribePublicDataUpdated(refreshPublicClients);
     document.addEventListener('visibilitychange', loadWhenVisible);
-    const timer = window.setInterval(loadWhenVisible, 60_000);
     return () => {
       cancelled = true;
       unsubscribePublicData();
       document.removeEventListener('visibilitychange', loadWhenVisible);
-      window.clearInterval(timer);
     };
   }, [authLoading, monitorMode, isAuthenticated]);
 

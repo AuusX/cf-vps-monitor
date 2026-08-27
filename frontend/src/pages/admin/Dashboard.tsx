@@ -943,10 +943,9 @@ export default function AdminDashboard() {
   useEffect(() => { loadClients(); }, [loadClients]);
   useEffect(() => {
     const handleVisible = () => {
-      void loadClients();
+      if (document.visibilityState === 'visible') void loadClients();
     };
     document.addEventListener('visibilitychange', handleVisible);
-    window.addEventListener('focus', handleVisible);
     const unsubscribePublicData = subscribePublicDataUpdated((detail) => {
       if (detail?.clients) {
         setClients((current) => applyAdminClientUpdate(current, detail));
@@ -954,14 +953,9 @@ export default function AdminDashboard() {
       }
       void loadClients(true);
     });
-    const iv = window.setInterval(() => {
-      void loadClients();
-    }, 60_000);
     return () => {
       document.removeEventListener('visibilitychange', handleVisible);
-      window.removeEventListener('focus', handleVisible);
       unsubscribePublicData();
-      window.clearInterval(iv);
     };
   }, [loadClients]);
 

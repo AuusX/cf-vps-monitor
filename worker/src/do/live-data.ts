@@ -1798,7 +1798,6 @@ export class LiveDataDO {
           // 忽略 ack 发送错误
         }
       }
-      this.runBackground('do_agent_policy', this.sendCurrentPolicyToAgent(ws, now, false, false, clientId));
       const basicInfoReport = this.latestBasicInfoReport(reports);
       if (basicInfoReport) {
         this.runBackground('do_basic_info_sync', this.syncBasicInfoFromReport(clientId, clientName, hidden, basicInfoReport));
@@ -1823,7 +1822,6 @@ export class LiveDataDO {
     }
 
     // 持久化放在实时响应之后，避免数据库写入延迟阻塞 Agent WebSocket ack。
-    this.runBackground('do_agent_policy', this.sendCurrentPolicyToAgent(ws, now, false, false, clientId));
     this.runBackground('do_record_persistence', this.persistReport(clientId, report, reportTime));
   }
 
