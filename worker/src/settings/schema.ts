@@ -154,9 +154,9 @@ export const SETTING_SCHEMA = {
   },
   live_poll_active_interval_sec: {
     type: 'integer',
-    defaultValue: '3',
+    defaultValue: '30',
     public: true,
-    min: 3,
+    min: 30,
     max: 300,
   },
   live_poll_idle_interval_sec: {

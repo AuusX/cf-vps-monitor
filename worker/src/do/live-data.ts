@@ -389,7 +389,7 @@ export class LiveDataDO {
   private recordLastPersistAt: Map<string, number> = new Map();
   private pingResultStateCache: Map<string, PingResultState> = new Map();
   private policySettings: AgentPolicySettings = {
-    activeIntervalSec: 3,
+    activeIntervalSec: 30,
     idleIntervalSec: 120,
     viewerTtlSec: 120,
     pingIntervalSec: 120,
@@ -798,7 +798,7 @@ export class LiveDataDO {
     const pending = (async () => {
       const settings = buildAdminSettings(await db.getSettingsByKeys(database, AGENT_POLICY_SETTING_KEYS));
       this.policySettings = {
-        activeIntervalSec: this.boundIntegerSetting(settings.live_poll_active_interval_sec, 3, 3, 300),
+        activeIntervalSec: this.boundIntegerSetting(settings.live_poll_active_interval_sec, 30, 30, 300),
         idleIntervalSec: this.boundIntegerSetting(settings.live_poll_idle_interval_sec, 120, 60, 3600),
         viewerTtlSec: this.boundIntegerSetting(settings.live_poll_active_max_duration_sec, 120, 60, 3600),
         pingIntervalSec: this.boundIntegerSetting(settings.ping_record_persist_interval_sec, 120, 60, 3600),

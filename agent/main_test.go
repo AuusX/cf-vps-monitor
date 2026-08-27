@@ -110,11 +110,17 @@ func TestWebSocketReconnectDelaySlowsAuthFailures(t *testing.T) {
 	reconnectInterval = 5
 	defer func() { reconnectInterval = oldReconnectInterval }()
 
-	if got := webSocketReconnectDelay(errors.New("401 Unauthorized")); got != 10*time.Minute {
+	if got := webSocketReconnectDelay(errors.New("401 Unauthorized"), 1); got != 10*time.Minute {
 		t.Fatalf("auth failure reconnect delay = %s, want 10m", got)
 	}
-	if got := webSocketReconnectDelay(errors.New("dial tcp timeout")); got != 5*time.Second {
+	if got := webSocketReconnectDelay(errors.New("dial tcp timeout"), 1); got != 5*time.Second {
 		t.Fatalf("network failure reconnect delay = %s, want 5s", got)
+	}
+	if got := webSocketReconnectDelay(errors.New("dial tcp timeout"), 4); got != 40*time.Second {
+		t.Fatalf("fourth network failure reconnect delay = %s, want 40s", got)
+	}
+	if got := webSocketReconnectDelay(errors.New("dial tcp timeout"), 20); got != 10*time.Minute {
+		t.Fatalf("capped network failure reconnect delay = %s, want 10m", got)
 	}
 }
 

@@ -31,11 +31,19 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: 配置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+
       - name: 安装依赖
         run: npm ci
 
       - name: 检查自定义请求预算
         run: node --test frontend/src/contexts/live-request-budget.test.mjs
+
+      - name: 检查 Agent 退避策略
+        run: npm test
 
       - name: 类型检查
         run: npm run lint

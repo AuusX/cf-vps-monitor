@@ -1,4 +1,4 @@
-export const LIVE_POLL_INTERVAL_ACTIVE = 3000;
+export const LIVE_POLL_INTERVAL_ACTIVE = 30_000;
 export const LIVE_POLL_INTERVAL_IDLE = 2 * 60 * 1000;
 export const LIVE_POLL_ACTIVE_MAX_DURATION = 10 * 60 * 1000;
 export const LIVE_POLL_SETTINGS_UPDATED_EVENT = 'cf-monitor:live-poll-settings-updated';
@@ -34,7 +34,7 @@ function secondsToMsSetting(
 
 export function normalizeLivePollConfig(settings: LivePollSettings | null | undefined): LivePollConfig {
   return {
-    activeIntervalMs: secondsToMsSetting(settings?.live_poll_active_interval_sec, 3, 3, 300),
+    activeIntervalMs: secondsToMsSetting(settings?.live_poll_active_interval_sec, 30, 30, 300),
     idleIntervalMs: secondsToMsSetting(settings?.live_poll_idle_interval_sec, 120, 60, 3600),
     activeMaxDurationMs: secondsToMsSetting(settings?.live_poll_active_max_duration_sec, 120, 60, 3600),
   };

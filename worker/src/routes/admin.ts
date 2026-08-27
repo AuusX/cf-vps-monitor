@@ -1101,7 +1101,7 @@ export async function buildCapacityEstimate(database: db.QueryDatabase, options:
   const recordEnabled = settings.record_enabled !== 'false';
   const recordPreserveHours = Math.min(72, parsePositiveNumber(settings.record_preserve_time, 72));
   const pingPreserveHours = Math.min(72, parsePositiveNumber(settings.ping_record_preserve_time, recordPreserveHours));
-  const sampleIntervalSec = Math.max(3, parsePositiveNumber(settings.live_poll_active_interval_sec, 3));
+  const sampleIntervalSec = Math.max(30, parsePositiveNumber(settings.live_poll_active_interval_sec, 30));
   const idleIntervalSec = Math.max(60, parsePositiveNumber(settings.live_poll_idle_interval_sec, 120));
   const persistIntervalSec = Math.max(3, parsePositiveNumber(settings.record_persist_interval_sec, 120));
   const unifiedPingIntervalSec = Math.min(

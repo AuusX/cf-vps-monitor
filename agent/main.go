@@ -1231,34 +1231,52 @@ func runWebSocketReporter() {
 	log.Printf("WebSocket reporter started: %s", endpoint)
 	preparer := &reportPreparer{}
 	pingState := newPingReportState()
+	consecutiveFailures := 0
 
 	for {
 		conn, err := connectWebSocket(endpoint, token)
 		if err != nil {
-			delay := webSocketReconnectDelay(err)
+			consecutiveFailures++
+			delay := webSocketReconnectDelay(err, consecutiveFailures)
 			log.Printf("WebSocket connect failed: %v; reconnecting in %s", err, delay)
 			time.Sleep(delay)
 			continue
 		}
 
 		log.Println("WebSocket connected")
-		_ = runWebSocketSession(
+		connectedAt := time.Now()
+		err = runWebSocketSession(
 			conn,
 			preparer,
 			pingState,
 			time.Duration(reportInterval)*time.Second,
 			30*time.Second,
 		)
-		log.Printf("reconnecting in %ds", reconnectInterval)
-		time.Sleep(time.Duration(reconnectInterval) * time.Second)
+		if time.Since(connectedAt) >= 5*time.Minute {
+			consecutiveFailures = 0
+		}
+		consecutiveFailures++
+		delay := webSocketReconnectDelay(err, consecutiveFailures)
+		log.Printf("WebSocket disconnected; reconnecting in %s", delay)
+		time.Sleep(delay)
 	}
 }
 
-func webSocketReconnectDelay(err error) time.Duration {
+func webSocketReconnectDelay(err error, consecutiveFailures int) time.Duration {
 	if err != nil && (strings.HasPrefix(err.Error(), "401 ") || strings.HasPrefix(err.Error(), "403 ")) {
 		return 10 * time.Minute
 	}
-	return time.Duration(reconnectInterval) * time.Second
+	delay := time.Duration(reconnectInterval) * time.Second
+	if delay >= 10*time.Minute {
+		return 10 * time.Minute
+	}
+	for attempt := 1; attempt < consecutiveFailures; attempt++ {
+		if delay >= 5*time.Minute {
+			return 10 * time.Minute
+		}
+		delay *= 2
+	}
+	return delay
 }
 
 func runWebSocketSession(
