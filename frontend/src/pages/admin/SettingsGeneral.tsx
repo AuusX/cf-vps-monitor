@@ -88,7 +88,7 @@ interface CapacityEstimate {
 
 const DEFAULT_RETENTION_HOURS = 72;
 const MAX_RETENTION_HOURS = 72;
-const DEFAULT_ACTIVE_SAMPLE_SEC = 3;
+const DEFAULT_ACTIVE_SAMPLE_SEC = 30;
 const DEFAULT_IDLE_UPLOAD_SEC = 120;
 const MIN_IDLE_UPLOAD_SEC = 60;
 const DEFAULT_VIEWER_TTL_SEC = 120;
@@ -327,7 +327,7 @@ export default function SettingsGeneral() {
     const sampleIntervalSec = clampInteger(
       settings.live_poll_active_interval_sec,
       DEFAULT_ACTIVE_SAMPLE_SEC,
-      3,
+      30,
       300,
     );
     const idleUploadIntervalSec = clampInteger(
@@ -668,7 +668,7 @@ export default function SettingsGeneral() {
                 value={getSettingValue(settings, 'live_poll_active_interval_sec', String(DEFAULT_ACTIVE_SAMPLE_SEC))}
                 onChange={(value) => updateSetting('live_poll_active_interval_sec', value)}
                 type="number"
-                placeholder="3"
+                placeholder="30"
                 width="100%"
               />
               <SettingInput

@@ -231,6 +231,9 @@ export function LiveDataProvider({ children, enabled = true, viewer = true }: Li
   const metadataVersionRef = useRef<string | null>(null);
   const pollConfigRef = useRef<LivePollConfig>(DEFAULT_LIVE_POLL_CONFIG);
   const fallbackExpiresAtRef = useRef<number | null>(null);
+  const viewerSessionIdRef = useRef(
+    globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   const activeSinceRef = useRef<number | null>(
     enabled && viewer ? Date.now() : null,
   );
@@ -422,7 +425,11 @@ export function LiveDataProvider({ children, enabled = true, viewer = true }: Li
           setLiveData(current => current && !isEmptyLiveSnapshot(current) && isEmptyLiveSnapshot(live) ? current : live);
           setLoading(false);
         }
-        const tokenResponse = await fetch('/api/ws/live-token');
+        const tokenResponse = await fetch('/api/ws/live-token', {
+          headers: {
+            'X-CF-Monitor-Viewer-Session': viewerSessionIdRef.current,
+          },
+        });
         if (!tokenResponse.ok) throw new Error(`HTTP ${tokenResponse.status}`);
         const tokenData = normalizeViewerTokenResponse(await tokenResponse.json());
         if (!tokenData) throw new Error('Invalid live token response');

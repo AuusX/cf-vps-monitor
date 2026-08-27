@@ -22,6 +22,9 @@ type CloudflareRequestMetadata = {
 };
 const VIEWER_TOKEN_RATE_LIMIT_WINDOW_MS = 60_000;
 const VIEWER_TOKEN_RATE_LIMIT_MAX = 20;
+const VIEWER_SESSION_TOKEN_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
+const VIEWER_SESSION_TOKEN_BUDGET_MAX = 3;
+const VIEWER_SESSION_HEADER = 'X-CF-Monitor-Viewer-Session';
 const LIVE_CLIENTS_RATE_LIMIT_WINDOW_MS = 60_000;
 const LIVE_CLIENTS_RATE_LIMIT_MAX = 180;
 const LIVE_CLIENTS_CACHE_SECONDS = 2;
@@ -114,7 +117,7 @@ async function syncAgentNetworkMetadata(c: WsContext, client: db.ClientIdentity,
 
 function cleanupLocalWsRateLimitBuckets(nowMs: number): void {
   for (const [key, bucket] of localWsRateLimitBuckets) {
-    if (bucket.resetAt <= nowMs || nowMs - bucket.lastSeenAt > VIEWER_TOKEN_RATE_LIMIT_WINDOW_MS * 5) {
+    if (bucket.resetAt <= nowMs) {
       localWsRateLimitBuckets.delete(key);
     }
   }
@@ -218,6 +221,28 @@ async function enforceViewerTokenRateLimit(c: WsContext, ip: string): Promise<Re
   );
 }
 
+function viewerSessionId(c: WsContext): string {
+  const value = String(c.req.header(VIEWER_SESSION_HEADER) || '').trim();
+  return /^[A-Za-z0-9_-]{16,64}$/.test(value) ? value : 'legacy';
+}
+
+async function enforceViewerSessionTokenBudget(
+  c: WsContext,
+  ip: string,
+  sessionId: string,
+): Promise<Response | null> {
+  return enforceWsRateLimit(
+    c,
+    'viewer-token',
+    `viewer-session:${sessionId}`,
+    ip,
+    VIEWER_SESSION_TOKEN_BUDGET_MAX,
+    VIEWER_SESSION_TOKEN_BUDGET_WINDOW_MS,
+    'Live viewer session expired; refresh the page to start a new session',
+    true,
+  );
+}
+
 async function enforceLiveClientsRateLimit(c: WsContext, ip: string): Promise<Response | null> {
   return enforceWsRateLimit(
     c,
@@ -304,6 +329,8 @@ wsRoutes.get('/ws/live-token', async (c) => {
   const ip = requestIp(c);
   const limited = await enforceViewerTokenRateLimit(c, ip);
   if (limited) return limited;
+  const sessionLimited = await enforceViewerSessionTokenBudget(c, ip, viewerSessionId(c));
+  if (sessionLimited) return sessionLimited;
 
   const ttlMs = await viewerTtlMs(c);
   c.header('Cache-Control', 'no-store');

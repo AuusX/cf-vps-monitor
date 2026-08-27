@@ -9,6 +9,10 @@ const liveDataDurableObject = await readFile(
   new URL('../../../worker/src/do/live-data.ts', import.meta.url),
   'utf8',
 );
+const websocketRoutes = await readFile(
+  new URL('../../../worker/src/routes/websocket.ts', import.meta.url),
+  'utf8',
+);
 
 assert.match(
   liveDataContext,
@@ -16,9 +20,17 @@ assert.match(
 );
 assert.doesNotMatch(liveDataContext, /reconnectLiveWebSocket/);
 assert.match(livePolling, /return currentExpiresAt \?\? now \+ config\.activeMaxDurationMs;/);
+assert.match(livePolling, /LIVE_POLL_INTERVAL_ACTIVE = 30_000/);
+assert.match(liveDataContext, /X-CF-Monitor-Viewer-Session/);
+assert.match(websocketRoutes, /VIEWER_SESSION_TOKEN_BUDGET_MAX = 3/);
+assert.match(websocketRoutes, /viewer-session:\$\{sessionId\}/);
 
 assert.doesNotMatch(publicIndex, /setInterval\(loadWhenVisible,\s*60_000\)/);
 assert.doesNotMatch(adminDashboard, /setInterval\([\s\S]{0,100}loadClients\(\)[\s\S]{0,100}60_000/);
 
 const policyCallCount = [...liveDataDurableObject.matchAll(/sendCurrentPolicyToAgent\(/g)].length;
 assert.equal(policyCallCount, 2, '策略只应在方法定义和 Agent 建连时出现');
+assert.match(
+  liveDataDurableObject,
+  /activeIntervalSec: this\.boundIntegerSetting\(settings\.live_poll_active_interval_sec, 30, 30, 300\)/,
+);
