@@ -76,9 +76,7 @@ export function getFallbackViewerExpiry({
   now?: number;
   config?: LivePollConfig;
 }) {
-  void now;
-  void config;
-  return currentExpiresAt ?? null;
+  return currentExpiresAt ?? now + config.activeMaxDurationMs;
 }
 
 export function isViewerWindowExpired({

@@ -1,0 +1,44 @@
+name: 自定义请求预算检查
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: custom-request-budget-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 检查观看时限与请求预算
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v5
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 检查自定义请求预算
+        run: node --test frontend/src/contexts/live-request-budget.test.mjs
+
+      - name: 类型检查
+        run: npm run lint
+
+      - name: 构建 Cloudflare 应用
+        run: npm run build
