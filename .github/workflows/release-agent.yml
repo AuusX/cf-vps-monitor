@@ -71,6 +71,18 @@ jobs:
           cp install-windows.ps1 dist/install-windows.ps1
           (cd dist && sha256sum * > SHA256SUMS)
 
+      - name: Verify fork installer sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'AuusX/cf-vps-monitor' install.sh
+          grep -F 'AuusX/cf-vps-monitor' install-linux.sh
+          grep -F 'AuusX/cf-vps-monitor' install-windows.ps1
+          if grep -F 'kadidalax/cf-vps-monitor' install.sh install-linux.sh install-windows.ps1; then
+            echo 'Installer still references the upstream release repository.' >&2
+            exit 1
+          fi
+
       - name: Generate artifact provenance
         uses: actions/attest-build-provenance@v3
         with:

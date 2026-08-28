@@ -112,7 +112,7 @@ Unix 安装命令会自动判断 Linux、Alpine/OpenRC、macOS、FreeBSD，以�
 卸载单个 Unix 实例：
 
 ```bash
-wget -qO- 'https://raw.githubusercontent.com/kadidalax/cf-vps-monitor/refs/heads/main/agent/install.sh' | sh -s -- --uninstall -i 实例ID
+wget -qO- 'https://raw.githubusercontent.com/AuusX/cf-vps-monitor/refs/heads/main/agent/install.sh' | sh -s -- --uninstall -i 实例ID
 ```
 
 卸载单个 Windows 实例：

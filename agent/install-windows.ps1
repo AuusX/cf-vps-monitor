@@ -9,7 +9,7 @@ param(
   [Alias("n")]
   [string]$Name = $env:COMPUTERNAME,
   [Alias("Interval")]
-  [int]$ReportInterval = 3,
+  [int]$ReportInterval = 30,
   [int]$PingInterval = 120,
   [Alias("r")]
   [ValidateRange(1, 31)]
@@ -94,7 +94,7 @@ function Set-InstanceDefaults {
 }
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repository = "kadidalax/cf-vps-monitor"
+$repository = "AuusX/cf-vps-monitor"
 $branch = "main"
 $autoBinaryUrl = $false
 

@@ -327,9 +327,9 @@ const requirePublicMonitorAccess = async (c: AppContext, next: Next): Promise<Re
 };
 app.use('/api/*', requirePublicMonitorAccess);
 
-app.get('/agent/install.sh', (c) => c.redirect('https://raw.githubusercontent.com/kadidalax/cf-vps-monitor/main/agent/install.sh', 302));
-app.get('/agent/install-linux.sh', (c) => c.redirect('https://raw.githubusercontent.com/kadidalax/cf-vps-monitor/main/agent/install-linux.sh', 302));
-app.get('/agent/install-windows.ps1', (c) => c.redirect('https://raw.githubusercontent.com/kadidalax/cf-vps-monitor/main/agent/install-windows.ps1', 302));
+app.get('/agent/install.sh', (c) => c.redirect('https://raw.githubusercontent.com/AuusX/cf-vps-monitor/main/agent/install.sh', 302));
+app.get('/agent/install-linux.sh', (c) => c.redirect('https://raw.githubusercontent.com/AuusX/cf-vps-monitor/main/agent/install-linux.sh', 302));
+app.get('/agent/install-windows.ps1', (c) => c.redirect('https://raw.githubusercontent.com/AuusX/cf-vps-monitor/main/agent/install-windows.ps1', 302));
 
 // 公开 API，无认证
 app.route('/api/setup', setupRoutes);
