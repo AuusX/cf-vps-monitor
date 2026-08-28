@@ -4,7 +4,7 @@ set -euo pipefail
 SERVER=""
 TOKEN=""
 NODE_NAME="$(hostname)"
-INTERVAL="3"
+INTERVAL="30"
 PING_INTERVAL="120"
 TRAFFIC_RESET_DAY="1"
 MODE="websocket"
@@ -25,7 +25,7 @@ YES="0"
 KEEP_FILES="0"
 INSTALL_GHPROXY=""
 PROXY=""
-CF_MONITOR_REPOSITORY="kadidalax/cf-vps-monitor"
+CF_MONITOR_REPOSITORY="AuusX/cf-vps-monitor"
 CF_MONITOR_BRANCH="main"
 CF_MONITOR_RELEASE_TAG=""
 CF_MONITOR_RELEASE_BASE="https://github.com/${CF_MONITOR_REPOSITORY}/releases/latest/download"
@@ -48,7 +48,7 @@ Options:
   --server URL              Worker URL, required.
   --token TOKEN             Agent token from admin panel. Required.
   --name NAME               Node name, default: hostname.
-  --interval SECONDS        Report interval, default: 3.
+  --interval SECONDS        Report interval, default: 30.
   --ping-interval SECONDS   Ping task poll interval, default: 120.
   --traffic-reset-day DAY   Monthly traffic reset day, default: 1.
   --mode MODE               websocket or http, default: websocket.
